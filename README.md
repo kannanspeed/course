@@ -93,6 +93,23 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.tasks;
 
 ## 🚀 Deployment
 
+### Deploy to Render (Recommended)
+
+1. **Go to**: [https://render.com](https://render.com)
+2. **Sign up** with your GitHub account
+3. **Click "New +"** → **"Static Site"**
+4. **Connect repository**: `kannanspeed/course`
+5. **Use these settings**:
+   - **Build Command**: `npm install && npm run build`
+   - **Publish Directory**: `dist`
+   - **Node Version**: `18`
+6. **Add environment variables**:
+   - `VITE_SUPABASE_URL`: `https://qodpovituewhzjmtvghh.supabase.co`
+   - `VITE_SUPABASE_ANON_KEY`: `your_supabase_anon_key`
+7. **Click "Create Static Site"**
+
+**Your app will be live at**: `https://your-app-name.onrender.com`
+
 ### Deploy to GitHub Pages
 
 1. **Build the project**
