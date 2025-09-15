@@ -21,7 +21,7 @@ function TaskManager({ session }: { session: Session }) {
     const { error, data } = await supabase
       .from("tasks")
       .select("*")
-      .order("created_at", { ascending: true });
+      .order("created_at", { ascending: false });
 
     if (error) {
       console.error("Error reading task: ", error.message);
@@ -36,11 +36,19 @@ function TaskManager({ session }: { session: Session }) {
 
     if (error) {
       console.error("Error deleting task: ", error.message);
+      alert("Error deleting task: " + error.message);
       return;
     }
+    
+    console.log("Task deleted successfully, real-time update will handle UI refresh");
   };
 
   const updateTask = async (id: number) => {
+    if (!newDescription.trim()) {
+      alert("Please enter a description to update");
+      return;
+    }
+
     const { error } = await supabase
       .from("tasks")
       .update({ description: newDescription })
@@ -48,8 +56,12 @@ function TaskManager({ session }: { session: Session }) {
 
     if (error) {
       console.error("Error updating task: ", error.message);
+      alert("Error updating task: " + error.message);
       return;
     }
+    
+    console.log("Task updated successfully, real-time update will handle UI refresh");
+    setNewDescription(""); // Clear the input field
   };
 
   const uploadImage = async (file: File): Promise<string | null> => {
@@ -74,12 +86,19 @@ function TaskManager({ session }: { session: Session }) {
   const handleSubmit = async (e: any) => {
     e.preventDefault();
 
+    // Check if title is empty
+    if (!newTask.title.trim()) {
+      console.error("Task title is required");
+      alert("Please enter a task title");
+      return;
+    }
+
     let imageUrl: string | null = null;
     if (taskImage) {
       imageUrl = await uploadImage(taskImage);
     }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("tasks")
       .insert({ ...newTask, email: session.user.email, image_url: imageUrl })
       .select()
@@ -87,10 +106,16 @@ function TaskManager({ session }: { session: Session }) {
 
     if (error) {
       console.error("Error adding task: ", error.message);
+      alert("Error adding task: " + error.message);
       return;
     }
 
+    console.log("Task created successfully:", data);
     setNewTask({ title: "", description: "" });
+    setTaskImage(null);
+    
+    // Refresh the task list
+    fetchTasks();
   };
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -105,18 +130,55 @@ function TaskManager({ session }: { session: Session }) {
 
   useEffect(() => {
     const channel = supabase.channel("tasks-channel");
+    
+    // Listen for INSERT events (new tasks)
     channel
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "tasks" },
         (payload) => {
+          console.log("Real-time INSERT:", payload);
           const newTask = payload.new as Task;
-          setTasks((prev) => [...prev, newTask]);
+          setTasks((prev) => [newTask, ...prev]);
+        }
+      )
+      // Listen for UPDATE events (edited tasks)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "tasks" },
+        (payload) => {
+          console.log("Real-time UPDATE:", payload);
+          const updatedTask = payload.new as Task;
+          setTasks((prev) => 
+            prev.map(task => 
+              task.id === updatedTask.id ? updatedTask : task
+            )
+          );
+        }
+      )
+      // Listen for DELETE events (deleted tasks)
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "tasks" },
+        (payload) => {
+          console.log("Real-time DELETE:", payload);
+          const deletedTask = payload.old as Task;
+          setTasks((prev) => 
+            prev.filter(task => task.id !== deletedTask.id)
+          );
         }
       )
       .subscribe((status) => {
-        console.log("Subscription: ", status);
+        console.log("Real-time subscription status:", status);
+        if (status === 'SUBSCRIBED') {
+          console.log("✅ Real-time updates are now active!");
+        }
       });
+
+    // Cleanup subscription on component unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   console.log(tasks);
@@ -130,6 +192,7 @@ function TaskManager({ session }: { session: Session }) {
         <input
           type="text"
           placeholder="Task Title"
+          value={newTask.title}
           onChange={(e) =>
             setNewTask((prev) => ({ ...prev, title: e.target.value }))
           }
@@ -137,6 +200,7 @@ function TaskManager({ session }: { session: Session }) {
         />
         <textarea
           placeholder="Task Description"
+          value={newTask.description}
           onChange={(e) =>
             setNewTask((prev) => ({ ...prev, description: e.target.value }))
           }
@@ -169,6 +233,7 @@ function TaskManager({ session }: { session: Session }) {
               <div>
                 <textarea
                   placeholder="Updated description..."
+                  value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
                 />
                 <button
