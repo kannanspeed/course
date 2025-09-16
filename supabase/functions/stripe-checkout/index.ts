@@ -86,7 +86,7 @@ serve(async (req) => {
       })
     }
 
-    // Create checkout session with proper URLs
+    // Create checkout session with proper URLs and CSP-friendly settings
     const session = await stripe.checkout.sessions.create({
       customer: customer.id,
       payment_method_types: ['card'],
@@ -94,10 +94,15 @@ serve(async (req) => {
       mode: 'subscription',
       success_url: `https://qodpovituewhzjmtvghh.supabase.co/?success=true&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `https://qodpovituewhzjmtvghh.supabase.co/?canceled=true`,
+      billing_address_collection: 'auto',
+      allow_promotion_codes: false,
       metadata: {
         userId: userId,
         userEmail: userEmail,
       },
+      // Add CSP-friendly settings
+      ui_mode: 'hosted',
+      automatic_tax: { enabled: false },
     })
 
     console.log('Stripe checkout session created:', session.id)

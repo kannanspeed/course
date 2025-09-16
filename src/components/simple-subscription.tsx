@@ -52,6 +52,16 @@ export const SimpleSubscription = ({ session }: SimpleSubscriptionProps) => {
     try {
       setIsSubscribing(true);
       
+      // Suppress browser extension errors
+      const originalConsoleError = console.error;
+      console.error = (...args) => {
+        if (args[0] && typeof args[0] === 'string' && args[0].includes('ethereum')) {
+          // Ignore ethereum property redefinition errors from browser extensions
+          return;
+        }
+        originalConsoleError.apply(console, args);
+      };
+      
       // Call the Supabase Edge Function
       const { data, error } = await supabase.functions.invoke('stripe-checkout', {
         body: {
@@ -60,14 +70,32 @@ export const SimpleSubscription = ({ session }: SimpleSubscriptionProps) => {
           userEmail: session.user.email,
         }
       });
+      
+      // Restore original console.error
+      console.error = originalConsoleError;
 
       if (error) {
         throw new Error(error.message);
       }
 
-      // Redirect to Stripe checkout
+      // Open Stripe checkout in new window to avoid CSP issues
       if (data.url) {
-        window.location.href = data.url;
+        // Open in new window to avoid CSP conflicts
+        const checkoutWindow = window.open(data.url, '_blank', 'width=600,height=700,scrollbars=yes,resizable=yes');
+        
+        if (!checkoutWindow) {
+          // Fallback if popup is blocked
+          window.location.href = data.url;
+        } else {
+          // Check if window is closed (payment completed)
+          const checkClosed = setInterval(() => {
+            if (checkoutWindow.closed) {
+              clearInterval(checkClosed);
+              // Refresh subscription status after payment
+              getSubscriptionStatus();
+            }
+          }, 1000);
+        }
       } else {
         alert(`Checkout session created: ${data.id}\n\nRedirecting to Stripe checkout...`);
       }
