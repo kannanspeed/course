@@ -62,49 +62,32 @@ export const SimpleSubscription = ({ session }: SimpleSubscriptionProps) => {
         originalConsoleError.apply(console, args);
       };
       
-      // Call the existing Supabase Edge Function
-      const { data, error } = await supabase.functions.invoke('stripe-checkout', {
-        body: {
-          priceId: 'price_1S84aVB4gMZdPiFsRIaXTfV0',
-          userId: session.user.id,
-          userEmail: session.user.email,
-        }
-      });
+      // Use your existing Stripe Payment Link - this bypasses all technical issues!
+      const stripePaymentLink = 'https://buy.stripe.com/test_bJe8wO0Eo7os7cA3P0fAc00';
       
-      // Restore original console.error
-      console.error = originalConsoleError;
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      // Open Stripe checkout in new window to avoid CSP issues
-      if (data && data.url) {
-        console.log('Opening Stripe checkout:', data.url);
-        
-        // Open in new window to avoid CSP conflicts
-        const checkoutWindow = window.open(data.url, '_blank', 'width=600,height=700,scrollbars=yes,resizable=yes');
-        
-        if (!checkoutWindow) {
-          // Fallback if popup is blocked
-          console.log('Popup blocked, redirecting directly');
-          window.location.href = data.url;
-        } else {
-          // Check if window is closed (payment completed)
-          const checkClosed = setInterval(() => {
-            if (checkoutWindow.closed) {
-              clearInterval(checkClosed);
-              console.log('Checkout window closed, refreshing subscription status');
-              // Refresh subscription status after payment
-              setTimeout(() => {
-                getSubscriptionStatus();
-              }, 2000); // Wait 2 seconds for webhook to process
-            }
-          }, 1000);
-        }
+      console.log('Opening Stripe Payment Link:', stripePaymentLink);
+      
+      // Open payment link in new window to avoid CSP conflicts
+      const paymentWindow = window.open(stripePaymentLink, '_blank', 'width=600,height=700,scrollbars=yes,resizable=yes');
+      
+      if (!paymentWindow) {
+        // Fallback if popup is blocked - redirect directly
+        console.log('Popup blocked, redirecting directly to payment link');
+        window.location.href = stripePaymentLink;
       } else {
-        console.error('No checkout URL received:', data);
-        alert('Failed to create checkout session. Please try again.');
+        // Check if window is closed (payment completed)
+        const checkClosed = setInterval(() => {
+          if (paymentWindow.closed) {
+            clearInterval(checkClosed);
+            console.log('Payment window closed, refreshing subscription status');
+            // Restore original console.error
+            console.error = originalConsoleError;
+            // Refresh subscription status after payment
+            setTimeout(() => {
+              getSubscriptionStatus();
+            }, 3000); // Wait 3 seconds for webhook to process
+          }
+        }, 1000);
       }
       
     } catch (error) {
