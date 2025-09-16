@@ -62,10 +62,10 @@ export const SimpleSubscription = ({ session }: SimpleSubscriptionProps) => {
         originalConsoleError.apply(console, args);
       };
       
-      // Call the Supabase Edge Function
+      // Call the existing Supabase Edge Function
       const { data, error } = await supabase.functions.invoke('stripe-checkout', {
         body: {
-          priceId: 'price_1S84aVB4gMZdPiFsRIaXTfV0', // Your actual Stripe Price ID
+          priceId: 'price_1S84aVB4gMZdPiFsRIaXTfV0',
           userId: session.user.id,
           userEmail: session.user.email,
         }
@@ -79,25 +79,32 @@ export const SimpleSubscription = ({ session }: SimpleSubscriptionProps) => {
       }
 
       // Open Stripe checkout in new window to avoid CSP issues
-      if (data.url) {
+      if (data && data.url) {
+        console.log('Opening Stripe checkout:', data.url);
+        
         // Open in new window to avoid CSP conflicts
         const checkoutWindow = window.open(data.url, '_blank', 'width=600,height=700,scrollbars=yes,resizable=yes');
         
         if (!checkoutWindow) {
           // Fallback if popup is blocked
+          console.log('Popup blocked, redirecting directly');
           window.location.href = data.url;
         } else {
           // Check if window is closed (payment completed)
           const checkClosed = setInterval(() => {
             if (checkoutWindow.closed) {
               clearInterval(checkClosed);
+              console.log('Checkout window closed, refreshing subscription status');
               // Refresh subscription status after payment
-              getSubscriptionStatus();
+              setTimeout(() => {
+                getSubscriptionStatus();
+              }, 2000); // Wait 2 seconds for webhook to process
             }
           }, 1000);
         }
       } else {
-        alert(`Checkout session created: ${data.id}\n\nRedirecting to Stripe checkout...`);
+        console.error('No checkout URL received:', data);
+        alert('Failed to create checkout session. Please try again.');
       }
       
     } catch (error) {
