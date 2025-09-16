@@ -15,11 +15,12 @@ export interface AdminUser {
 export const checkAdminStatus = async (userEmail: string): Promise<boolean> => {
   try {
     console.log('🔍 Admin check - Querying for email:', userEmail);
+    
+    // First try to get the data without .single() to avoid coercion errors
     const { data, error } = await supabase
       .from('admin_users')
       .select('is_admin')
-      .eq('email', userEmail)
-      .single();
+      .eq('email', userEmail);
     
     console.log('🔍 Admin check - Raw response:', { data, error });
     
@@ -29,7 +30,13 @@ export const checkAdminStatus = async (userEmail: string): Promise<boolean> => {
       return false;
     }
     
-    const isAdmin = data?.is_admin || false;
+    // Check if we got any results
+    if (!data || data.length === 0) {
+      console.log('🔍 Admin check - No admin user found for email:', userEmail);
+      return false;
+    }
+    
+    const isAdmin = data[0]?.is_admin || false;
     console.log('🔍 Admin check - Result:', isAdmin);
     return isAdmin;
   } catch (error) {
