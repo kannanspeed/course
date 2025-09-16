@@ -86,17 +86,14 @@ serve(async (req) => {
       })
     }
 
-    // Get the origin URL for success/cancel URLs
-    const origin = req.headers.get('origin') || 'https://qodpovituewhzjmtvghh.supabase.co'
-    
-    // Create checkout session
+    // Create checkout session with proper URLs
     const session = await stripe.checkout.sessions.create({
       customer: customer.id,
       payment_method_types: ['card'],
       line_items: [lineItem],
       mode: 'subscription',
-      success_url: `${origin}/?success=true&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/?canceled=true`,
+      success_url: `https://qodpovituewhzjmtvghh.supabase.co/?success=true&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `https://qodpovituewhzjmtvghh.supabase.co/?canceled=true`,
       metadata: {
         userId: userId,
         userEmail: userEmail,

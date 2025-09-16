@@ -55,7 +55,7 @@ export const SimpleSubscription = ({ session }: SimpleSubscriptionProps) => {
       // Call the Supabase Edge Function
       const { data, error } = await supabase.functions.invoke('stripe-checkout', {
         body: {
-          priceId: 'prod_T4D04VZVJGALXK', // Your actual Stripe Product ID
+          priceId: 'price_1S84aVB4gMZdPiFsRIaXTfV0', // Your actual Stripe Price ID
           userId: session.user.id,
           userEmail: session.user.email,
         }
