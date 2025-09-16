@@ -1,41 +1,75 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Session } from "@supabase/supabase-js";
+import { supabase } from "../supabase-client";
 
 interface SimpleSubscriptionProps {
   session: Session;
 }
 
-export const SimpleSubscription = ({ session: _session }: SimpleSubscriptionProps) => {
+interface SubscriptionStatus {
+  subscription_status: string;
+  is_subscribed: boolean;
+  stripe_customer_id?: string;
+  subscription_start_date?: string;
+  subscription_end_date?: string;
+}
+
+export const SimpleSubscription = ({ session }: SimpleSubscriptionProps) => {
   const [isSubscribing, setIsSubscribing] = useState(false);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Get subscription status
+  const getSubscriptionStatus = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('get-subscription-status');
+      
+      if (error) {
+        console.error('Error getting subscription status:', error);
+        setSubscriptionStatus({
+          subscription_status: 'free',
+          is_subscribed: false
+        });
+      } else {
+        setSubscriptionStatus(data);
+      }
+    } catch (error) {
+      console.error('Error getting subscription status:', error);
+      setSubscriptionStatus({
+        subscription_status: 'free',
+        is_subscribed: false
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    getSubscriptionStatus();
+  }, []);
 
   const handleSubscribe = async () => {
     try {
       setIsSubscribing(true);
       
-      // Call the deployed API endpoint
-      const response = await fetch('/api/checkout-simple', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          priceId: 'prod_T3qkxmpNE6worE',
-          userId: _session.user.id,
-          userEmail: _session.user.email,
-        }),
+      // Call the Supabase Edge Function
+      const { data, error } = await supabase.functions.invoke('stripe-checkout', {
+        body: {
+          priceId: 'prod_T3qkxmpNE6worE', // Your actual Stripe Product ID
+          userId: session.user.id,
+          userEmail: session.user.email,
+        }
       });
 
-      const result = await response.json();
-      
-      if (result.error) {
-        throw new Error(result.error);
+      if (error) {
+        throw new Error(error.message);
       }
 
       // Redirect to Stripe checkout
-      if (result.url) {
-        window.location.href = result.url;
+      if (data.url) {
+        window.location.href = data.url;
       } else {
-        alert(`Checkout session created: ${result.id}\n\nRedirecting to Stripe checkout...`);
+        alert(`Checkout session created: ${data.id}\n\nRedirecting to Stripe checkout...`);
       }
       
     } catch (error) {
@@ -46,6 +80,69 @@ export const SimpleSubscription = ({ session: _session }: SimpleSubscriptionProp
     }
   };
 
+  if (loading) {
+    return (
+      <div style={{ 
+        background: "#f8f9fa", 
+        border: "1px solid #dee2e6", 
+        borderRadius: "8px", 
+        padding: "1.5rem", 
+        margin: "1rem 0",
+        textAlign: "center"
+      }}>
+        <p>Loading subscription status...</p>
+      </div>
+    );
+  }
+
+  // If user is subscribed, show success message
+  if (subscriptionStatus?.is_subscribed) {
+    return (
+      <div style={{ 
+        background: "#d4edda", 
+        border: "1px solid #c3e6cb", 
+        borderRadius: "8px", 
+        padding: "1.5rem", 
+        margin: "1rem 0"
+      }}>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: "1rem" }}>
+          <div style={{ 
+            fontSize: "1.5rem", 
+            marginRight: "0.5rem" 
+          }}>
+            ✅
+          </div>
+          <h3 style={{ 
+            margin: 0, 
+            color: "#155724" 
+          }}>
+            Welcome to Premium!
+          </h3>
+        </div>
+        <p style={{ 
+          margin: "0 0 1rem 0", 
+          color: "#155724",
+          fontSize: "1.1rem"
+        }}>
+          You have an active subscription. Enjoy all premium features!
+        </p>
+        <div style={{ 
+          background: "#c3e6cb",
+          padding: "0.5rem",
+          borderRadius: "4px",
+          fontSize: "0.9rem",
+          color: "#155724"
+        }}>
+          <strong>Status:</strong> {subscriptionStatus.subscription_status}
+          {subscriptionStatus.subscription_end_date && (
+            <><br /><strong>Renews:</strong> {new Date(subscriptionStatus.subscription_end_date).toLocaleDateString()}</>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // If user is not subscribed, show subscription options
   return (
     <div style={{ 
       background: "#fff3cd", 
@@ -120,7 +217,7 @@ export const SimpleSubscription = ({ session: _session }: SimpleSubscriptionProp
           fontSize: "0.8rem",
           color: "#6c757d"
         }}>
-          <strong>Note:</strong> This is a demo. The actual Stripe integration will be implemented once the database functions are working properly.
+          <strong>Current Status:</strong> {subscriptionStatus?.subscription_status || 'free'}
         </div>
       </div>
     </div>
